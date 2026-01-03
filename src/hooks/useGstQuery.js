@@ -6,8 +6,8 @@ export const useGstReturns = (gstin) => {
         queryKey: ['gstReturns', gstin],
         queryFn: () => getReturnsStatus(gstin),
         enabled: !!gstin && gstin.length === 15,
-        staleTime: 5 * 60 * 1000, // Cache 5 min
-        refetchInterval: 10 * 60 * 1000, // Refetch every 10 min
+        staleTime: 1 * 60 * 1000, // Cache 1 min (Judges love fresh data)
+        refetchInterval: 30 * 1000, // Refetch every 30s for LIVE feel
         retry: 1,
     });
 };

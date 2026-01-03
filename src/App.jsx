@@ -15,6 +15,7 @@ import QuestGigLog from './pages/QuestGigLog'; // New Import
 import QuestReturns from './pages/QuestReturns'; // New Import
 import Leaderboard from './pages/Leaderboard';
 import Guru from './pages/Guru';
+import GrowthHub from './pages/GrowthHub';
 import Navbar from './components/Navbar';
 
 const queryClient = new QueryClient();
@@ -44,6 +45,7 @@ function App() {
               <Route path="/quests/returns" element={session ? <QuestReturns session={session} /> : <Navigate to="/login" />} />
               <Route path="/leaderboard" element={session ? <Leaderboard session={session} /> : <Navigate to="/login" />} />
               <Route path="/guru" element={session ? <Guru session={session} /> : <Navigate to="/login" />} />
+              <Route path="/growth" element={session ? <GrowthHub session={session} /> : <Navigate to="/login" />} />
             </Routes>
             {session && <Navbar />}
           </div>

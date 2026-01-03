@@ -26,7 +26,7 @@ export const useLeaderboard = (currentAuthUserId) => {
             const userIds = data.map(d => d.user_id);
             const { data: profiles } = await supabase
                 .from('profiles')
-                .select('user_id, gstin, level, compliance_score')
+                .select('user_id, gstin, level, compliance_score, trade_name')
                 .in('user_id', userIds);
 
             return data.map(d => {
@@ -36,7 +36,8 @@ export const useLeaderboard = (currentAuthUserId) => {
                     xp: d.score,
                     gstin: p?.gstin,
                     level: p?.level,
-                    compliance_score: p?.compliance_score
+                    compliance_score: p?.compliance_score,
+                    trade_name: p?.trade_name
                 };
             });
         },

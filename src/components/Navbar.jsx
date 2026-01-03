@@ -10,6 +10,7 @@ const Navbar = () => {
         { path: '/quests', label: 'Quests', icon: <Sword size={20} /> },
         { path: '/leaderboard', label: 'Arena', icon: <Trophy size={20} /> },
         { path: '/guru', label: 'Guru', icon: <MessageSquare size={20} /> },
+        { path: '/growth', label: 'Growth', icon: <MessageSquare size={20} /> },
     ];
 
     return (

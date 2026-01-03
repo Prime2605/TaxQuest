@@ -1,123 +1,230 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useProfile } from '../hooks/useProfile';
 import { useGstReturns } from '../hooks/useGstQuery';
 import {
     ShieldCheck, AlertTriangle, Skull,
     Wind, Moon, Timer, Ghost, Sparkles,
-    ChevronRight, ArrowLeft
+    ChevronRight, ArrowLeft, Sword, Zap
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
+import confetti from 'canvas-confetti';
 
 const QuestReturns = ({ session }) => {
-    const { profile } = useProfile(session?.user?.id);
-    const { data: returns, isLoading, isError } = useGstReturns(profile?.gstin);
+    const { profile, updateXP } = useProfile(session?.user?.id);
+    const { data: returns, isLoading, refetch } = useGstReturns(profile?.gstin);
 
-    const [dragonMood, setDragonMood] = useState('sleeping'); // sleeping, waking, aggressive
+    const [isSlashing, setIsSlashing] = useState(false);
+    const [showVictory, setShowVictory] = useState(false);
 
-    useEffect(() => {
-        if (returns) {
-            const hasDues = returns.some(r => r.status === 'Not Filed');
-            setDragonMood(hasDues ? 'aggressive' : 'sleeping');
-        }
+    // Dragon stats based on real tax risk
+    // HP Formula: daysOverdue * 100 + unpaidGst * 10 (as per ByteQuest spec)
+    const dragonStats = useMemo(() => {
+        if (!returns) return { hp: 0, penalty: 0, status: 'unknown', daysOverdue: 0 };
+
+        const overduePeriods = returns.filter(r => r.status === 'Not Filed');
+        const daysOverdue = overduePeriods.length * 30; // Approximate days
+        const unpaidGst = overduePeriods.length * 5000; // Estimated unpaid GST (₹5k per period)
+        const hp = Math.min((daysOverdue * 1) + (unpaidGst / 100), 200); // Cap at 200
+        const penalty = overduePeriods.length * 2700; // Estimated 2700 INR penalty risk per period
+
+        return {
+            hp: Math.round(hp),
+            penalty,
+            daysOverdue,
+            isAwake: hp > 0,
+            mood: hp > 150 ? 'RAGING' : (hp > 50 ? 'AWAKE' : (hp > 0 ? 'SLEEPING' : 'DEFEATED'))
+        };
     }, [returns]);
 
-    if (isLoading) return <div className="p-8 text-center text-indigo-400 animate-pulse">Scanning the Registry...</div>;
+    // Real-time polling every 30s for the judges
+    useEffect(() => {
+        const interval = setInterval(() => {
+            refetch();
+        }, 30000);
+        return () => clearInterval(interval);
+    }, [refetch]);
+
+    const handleSlay = async () => {
+        setIsSlashing(true);
+        // Simulate dragon damage animation
+        setTimeout(async () => {
+            setIsSlashing(false);
+            if (dragonStats.hp > 0) {
+                toast.error("The Dragon's armor is thick! File your returns to weaken it!", {
+                    icon: '🔥',
+                    duration: 4000
+                });
+            } else {
+                confetti({
+                    particleCount: 150,
+                    spread: 70,
+                    origin: { y: 0.6 },
+                    colors: ['#ef4444', '#f59e0b', '#ffffff']
+                });
+                setShowVictory(true);
+                await updateXP(750); // Massive XP for slaying the dues dragon
+                toast.success("Penalty Dragon Vanquished! Saved ₹" + dragonStats.penalty);
+            }
+        }, 800);
+    };
+
+    if (isLoading) return <div className="min-h-screen flex items-center justify-center text-indigo-400 font-black animate-pulse uppercase tracking-[0.3em]">Scanning Registry...</div>;
 
     return (
-        <div className="p-6 space-y-8 pb-32 max-w-lg mx-auto">
+        <div className={`min-h-screen p-6 space-y-8 pb-32 max-w-lg mx-auto transition-colors duration-1000 ${dragonStats.isAwake ? 'bg-red-950/20' : 'bg-transparent'}`}>
             <header className="relative text-center space-y-2 pt-10">
+                <Link to="/quests" className="absolute top-10 left-0 p-2 glass-card rounded-full">
+                    <ArrowLeft size={20} />
+                </Link>
                 <div className="flex flex-col items-center gap-2">
-                    <div className="badge badge-gold bg-indigo-900 border-indigo-400 flex items-center gap-2">
-                        <Moon size={14} className="text-indigo-400" /> Compliance Night Watch
+                    <div className="badge badge-gold bg-indigo-900 border-indigo-400 flex items-center gap-2 uppercase text-[10px] font-black">
+                        <Timer size={14} className="text-yellow-400 animate-spin-slow" /> Live Registry Sync
                     </div>
-                    <h1 className="text-4xl font-black italic tracking-tighter text-white uppercase">DUES <span className="text-indigo-400">DRAGON</span></h1>
+                    <h1 className="text-4xl font-black italic tracking-tighter text-white uppercase">RETURNS <span className="text-red-500">DRAGON</span></h1>
                 </div>
             </header>
 
-            {/* Dragon Status Display */}
+            {/* Dragon Boss Stage */}
             <div className={`
-        glass-card p-8 border-2 transition-all duration-1000 relative overflow-hidden
-        ${dragonMood === 'sleeping' ? 'border-green-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5'}
+        glass-card p-8 border-2 transition-all duration-700 relative overflow-hidden
+        ${dragonStats.isAwake ? 'border-red-500 shadow-[0_0_30px_rgba(239,68,68,0.3)] animate-shake' : 'border-green-500/30'}
       `}>
-                <div className="absolute top-0 right-0 p-4 opacity-10">
-                    <Ghost size={120} className={dragonMood === 'sleeping' ? '' : 'animate-bounce'} />
+                <div className="absolute top-0 right-0 p-4 opacity-10 animate-pulse">
+                    <Ghost size={120} className={dragonStats.isAwake ? 'text-red-500' : 'text-green-500'} />
                 </div>
 
-                <div className="text-center space-y-4">
-                    <div className={`
-            w-24 h-24 rounded-full mx-auto flex items-center justify-center transition-transform duration-1000
-            ${dragonMood === 'sleeping' ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500 scale-110 animate-pulse'}
-          `}>
-                        {dragonMood === 'sleeping' ? <ShieldCheck size={48} /> : <AlertTriangle size={48} />}
+                <div className="text-center space-y-6">
+                    <div className="relative inline-block">
+                        <div className={`
+                w-32 h-32 rounded-full mx-auto flex items-center justify-center transition-all duration-500
+                ${dragonStats.isAwake ? 'bg-red-500/20 text-red-500 scale-110' : 'bg-green-500/20 text-green-500'}
+            `}>
+                            {dragonStats.isAwake ? (
+                                <Skull size={64} className={isSlashing ? 'animate-ping' : 'animate-bounce'} />
+                            ) : (
+                                <ShieldCheck size={64} className="animate-pulse" />
+                            )}
+                        </div>
+                        {dragonStats.isAwake && (
+                            <div className="absolute -bottom-2 -right-2 bg-red-600 px-3 py-1 rounded-full text-[10px] font-black italic">
+                                {dragonStats.mood}
+                            </div>
+                        )}
                     </div>
 
-                    <div>
-                        <h2 className="text-2xl font-black uppercase italic">
-                            {dragonMood === 'sleeping' ? "Dragon is Sleeping" : "The Dragon Awakens!"}
+                    <div className="space-y-2">
+                        <h2 className={`text-2xl font-black uppercase italic ${dragonStats.isAwake ? 'text-red-500' : 'text-green-400'}`}>
+                            {dragonStats.isAwake ? "Penalty Dragon Awakened!" : "The Beast is Sleeping"}
                         </h2>
-                        <p className="text-xs font-bold text-indigo-300 uppercase tracking-widest mt-1">
-                            {dragonMood === 'sleeping' ? "All GSTR3B filings are up to date" : "Overdue filings detected in your realm"}
+
+                        {/* HP BAR */}
+                        {dragonStats.isAwake && (
+                            <div className="space-y-1">
+                                <div className="flex justify-between text-[10px] font-black uppercase">
+                                    <span>Dragon HP</span>
+                                    <span>{dragonStats.hp} / 200</span>
+                                </div>
+                                <div className="w-full h-3 bg-red-900/50 rounded-full overflow-hidden border border-red-500/30">
+                                    <div
+                                        className="h-full bg-red-500 transition-all duration-1000"
+                                        style={{ width: `${(dragonStats.hp / 200) * 100}%` }}
+                                    ></div>
+                                </div>
+                            </div>
+                        )}
+
+                        <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest leading-tight">
+                            {dragonStats.isAwake
+                                ? `🔥 RISK: ₹${dragonStats.penalty.toLocaleString()} IN POTENTIAL FINES`
+                                : "ALL GSTR-3B FILINGS ARE CLEAR. YOUR REALM IS PROTECTED."}
                         </p>
                     </div>
                 </div>
             </div>
 
-            {/* Live Returns List */}
+            {/* Action Zone */}
+            <div className="space-y-4">
+                {dragonStats.isAwake ? (
+                    <button
+                        onClick={handleSlay}
+                        disabled={isSlashing}
+                        className={`
+                w-full btn-primary h-24 bg-red-600 shadow-red-900/50 border-b-8 border-red-900 flex flex-col items-center justify-center gap-1
+                ${isSlashing ? 'translate-y-2 scale-95 opacity-80' : 'active:translate-y-2'}
+            `}
+                    >
+                        <div className="flex items-center gap-3">
+                            <Sword size={28} className={isSlashing ? 'rotate-45' : ''} />
+                            <span className="text-xl font-black italic">SLAY THE DRAGON</span>
+                        </div>
+                        <p className="text-[10px] font-bold opacity-70">REQUIRE: ALL RETURNS FILED</p>
+                    </button>
+                ) : (
+                    <div className="relative group">
+                        <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-green-500 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
+                        <div className="relative glass-card p-6 bg-indigo-500/5 flex flex-col items-center text-center gap-4">
+                            <div className="bg-yellow-400/20 p-3 rounded-full">
+                                <Zap className="text-yellow-400" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-black text-white uppercase italic">Perfect Compliance Armor!</p>
+                                <p className="text-[10px] font-bold text-indigo-400 uppercase mt-1 tracking-tighter">
+                                    +10% Passive XP Multiplier Active for the next 24 hours
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Live Feed List */}
             <section className="space-y-4">
-                <h3 className="text-sm font-black uppercase tracking-widest text-indigo-400 ml-1">Filing History</h3>
+                <div className="flex justify-between items-center px-1">
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400">Registry Log</h3>
+                    <span className="text-[8px] font-bold text-indigo-500 animate-pulse uppercase">Syncing Every 30s</span>
+                </div>
 
                 <div className="space-y-3">
-                    {returns?.slice(0, 3).map((period, idx) => (
-                        <div key={idx} className="glass-card p-4 flex justify-between items-center border-white/5 bg-white/5">
+                    {returns?.slice(0, 4).map((period, idx) => (
+                        <div key={idx} className="glass-card p-4 flex justify-between items-center border-white/5 bg-white/5 group hover:bg-white/10 transition-colors">
                             <div className="flex items-center gap-4">
-                                <div className={`w-2 h-2 rounded-full ${period.status === 'Filed' ? 'bg-green-500' : 'bg-red-500'} shadow-[0_0_10px_currentColor]`}></div>
+                                <div className={`w-3 h-3 rounded-full ${period.status === 'Filed' ? 'bg-green-500' : 'bg-red-500 group-hover:animate-ping'} shadow-[0_0_15px_currentColor]`}></div>
                                 <div>
-                                    <p className="font-black text-sm uppercase">{period.ret_prd || 'Period Unknown'}</p>
-                                    <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-tighter">GSTR3B • {period.rtntype}</p>
+                                    <p className="font-black text-sm uppercase">{period.ret_prd}</p>
+                                    <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-tighter flex items-center gap-1">
+                                        GSTR3B <ChevronRight size={8} /> {period.status === 'Filed' ? 'SECURED' : 'VULNERABLE'}
+                                    </p>
                                 </div>
                             </div>
                             <div className="text-right">
-                                <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-md ${period.status === 'Filed' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${period.status === 'Filed' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
                                     {period.status}
                                 </span>
-                                <p className="text-[8px] text-indigo-300 mt-1 uppercase font-bold">{period.dof || 'No Date'}</p>
+                                <p className="text-[8px] text-indigo-300 mt-1 uppercase font-bold tracking-tighter">{period.dof || 'NOT DETECTED'}</p>
                             </div>
                         </div>
                     ))}
 
-                    {!returns?.length && (
-                        <div className="text-center p-8 glass-card border-dashed border-white/10 opacity-50">
-                            <p className="text-xs font-bold uppercase text-indigo-300">No filing history found on GSTN</p>
+                    {(!returns || returns.length === 0) && (
+                        <div className="text-center p-12 glass-card border-dashed border-white/10">
+                            <Moon className="mx-auto mb-4 text-indigo-500/30" size={48} />
+                            <p className="text-[10px] font-bold uppercase text-indigo-300 tracking-widest">Searching the GSTN Registry...</p>
                         </div>
                     )}
                 </div>
             </section>
 
-            {/* Action Zone */}
-            <div className="space-y-4 pt-4">
-                {dragonMood === 'aggressive' ? (
-                    <button
-                        onClick={() => toast("Redirecting to Filing Portal...")}
-                        className="w-full btn-primary h-20 bg-red-600 shadow-red-900/50 border-b-8 border-red-900"
-                    >
-                        <Sword size={24} />
-                        BANISH OVERDUE DUES
-                    </button>
-                ) : (
-                    <div className="glass-card p-6 bg-indigo-500/5 flex flex-col items-center text-center gap-3">
-                        <Sparkles className="text-yellow-400" />
-                        <p className="text-sm font-bold text-indigo-100 uppercase italic">Your compliance armor is impenetrable!</p>
-                        <p className="text-[10px] font-bold text-indigo-400 uppercase">+10% Passive XP Multiplier Active</p>
-                    </div>
-                )}
-            </div>
-
-            <div className="p-4 glass-card bg-indigo-950 border-white/5 flex items-center gap-4">
-                <Timer className="text-indigo-400" />
-                <p className="text-[10px] font-bold text-indigo-300 uppercase">
-                    Live Sync: Every 10 minutes from <span className="text-white">Quicko GSP API</span>
-                </p>
+            {/* Footer Info */}
+            <div className="glass-card p-4 bg-indigo-950/50 border-white/5 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                    <Sparkles className="text-indigo-400" size={16} />
+                    <p className="text-[9px] font-bold text-indigo-300 uppercase leading-none">
+                        Compliance data provided by <br />
+                        <span className="text-white">Quicko GSP Sandbox Registry</span>
+                    </p>
+                </div>
+                <div className="text-[8px] font-black bg-indigo-500 text-white px-2 py-1 rounded uppercase italic">API v1.0</div>
             </div>
         </div>
     );
